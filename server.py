@@ -20,8 +20,14 @@ groups = {  # Groups for the message board
 
 # Deals with client communication and all the commands they input
 def handle_client(conn, addr):
-    username = conn.recv(1024).decode()  # Receive the username from client
-
+    while True:
+        username = conn.recv(1024).decode().strip()  # Receive the username from client
+        with lock:
+            if username not in clients.values():
+                clients[conn] = username
+                break
+            else:
+                conn.send("Username already taken. Please try again.\n".encode())
     # Register new user, notify others in the board and update user list
     with lock:
         clients[conn] = username
@@ -74,7 +80,7 @@ def handle_client(conn, addr):
                 else:
                     group_name, content = parts[1], parts[2]
                     post_group_message(conn, username, content, group_name)
-            elif msg == ("%group_users"):
+            elif msg.startswith("%group_users "):
                 group_name = msg.split()[1]
                 send_group_users(conn, group_name)
             elif msg.startswith("%post "):
@@ -82,8 +88,11 @@ def handle_client(conn, addr):
             elif msg == ("%groups"):
                 list_groups(conn)
             elif msg == ("%exit"):
+                exit_conn(conn, username)
                 print(f"{username} disconnected from bulletin board server")
                 break
+            else:
+                print("Invalid command. Please try again.")
         except Exception as e:
             print(f"Error handling client {addr}: {e}")
             break
@@ -272,13 +281,13 @@ def retrieve_group_messages(conn, group_id, message_id):
 # List all groups available to the client
 def list_groups(conn):
     group_list = ", ".join(groups.keys())
-    conn.send(f"Available groups: {group_list}".encode())
+    conn.send(f"Available groups: {group_list}\n".encode())
 
 # Leave the bulletin board server, but can still re-join later
-def leave(conn, username):
-    for group in groups.values():
-        if conn in group["users"]:
-            leave_group(conn, username, group)
+def leave(conn, username): 
+    for group_name in groups:
+        if conn in groups[group_name]["users"]:
+            leave_group(conn, username, group_name)
     with lock:
         if conn in clients:
             del clients[conn]
@@ -286,7 +295,10 @@ def leave(conn, username):
             conn.send("You have left the chat.".encode())
         else:
             conn.send("You are not connected to the chat.".encode())
-
+def exit_conn(conn, username):
+    leave(conn, username)
+    conn.close()
+    
 # This block ensures that the server runs when the script is executed directly
 if __name__ == "__main__":
     start_server()

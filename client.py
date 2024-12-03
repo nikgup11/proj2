@@ -9,6 +9,9 @@ def listen_for_notifications(client_socket):
             if message:
                 print(message)  # Print the received message (e.g., notifications, messages)
         except Exception as e:
+            if(client_socket.fileno() == -1):  # Check if the socket is closed
+                print("Connection closed by the server.")  # Print message when connection is closed by the server
+                break
             print(f"Error listening for notifications: {e}")
             break
 
