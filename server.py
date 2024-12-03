@@ -91,8 +91,10 @@ def handle_client(conn, addr):
                 exit_conn(conn, username)
                 print(f"{username} disconnected from bulletin board server")
                 break
+            elif msg.startswith("%connect "):
+                conn.send("Error: You are already connected to the chat.".encode())
             else:
-                print("Invalid command. Please try again.")
+                conn.send("Invalid command. Please try again.")
         except Exception as e:
             print(f"Error handling client {addr}: {e}")
             break
@@ -298,7 +300,7 @@ def leave(conn, username):
 def exit_conn(conn, username):
     leave(conn, username)
     conn.close()
-    
+
 # This block ensures that the server runs when the script is executed directly
 if __name__ == "__main__":
     start_server()
