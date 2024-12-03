@@ -32,29 +32,25 @@ def handle_client(conn, addr):
     while True:
         try:
             msg = conn.recv(1024).decode()  # Wait for client command input
-            
-            if msg.startswith("%post"):
-                post_message(username, msg[6:])
-            if msg.startswith("%join"):
-                handle_join() # NEED TO IMPLEMENT SEPARATE JOIN FOR OUTSIDE OF GROUPS (PART 1)
+                      
+            if msg == ("%join"):
+                handle_join(conn, username) # NEED TO IMPLEMENT SEPARATE JOIN FOR OUTSIDE OF GROUPS (PART 1)
             elif msg.startswith("%message "):  # Handle %message command
                 message_content = msg[9:]  # Remove "%message " from the string
                 post_message(username, message_content)  # Call post_message
-            elif msg.startswith("%leave"):
-                leave(conn, username)
-            elif msg.startswith("%users"):
+            elif msg == ("%users"):
                 send_user_list(conn)
-            elif msg.startswith("%retrieve_message"):  # Handle message retrieval by ID
+            elif msg.startswith("%retrieve_message "):  # Handle message retrieval by ID
                 parts = msg.split()
                 if len(parts) < 2:
                     conn.send("Invalid command. Usage: %retrieve_message message_id".encode())
                 else:
                     message_id = parts[1]
                     retrieve_message(conn, message_id)  # Retrieve the message by ID
-            elif msg.startswith("%group_join"):
+            elif msg.startswith("%group_join "):
                 group_name = msg.split()[1]
                 handle_group_join(conn, username, group_name)
-            elif msg.startswith("%group_messages"):
+            elif msg.startswith("%group_messages "):
                 parts = msg.split()
                 if len(parts) < 3:
                     conn.send("Invalid command. Usage: %group_messages group_name message_id".encode())
@@ -62,23 +58,30 @@ def handle_client(conn, addr):
                     group_name = parts[1]
                     message_id = parts[2]
                     retrieve_group_messages(conn, group_name, message_id)
-            elif msg.startswith("%leave_group"):
+            elif msg.startswith("%group_leave "):
                 parts = msg.split()
                 if len(parts) < 2:
                     conn.send("Invalid command. Usage: %leave_group group_name".encode())
                 else:
                     group_name = parts[1]
                     leave_group(conn, username, group_name)
-            elif msg.startswith("%post_group"):
+            elif msg == ("%leave"):
+                leave(conn, username)
+            elif msg.startswith("%group_post "):
                 parts = msg.split(" ", 2)
                 if len(parts) < 3:
                     conn.send("Invalid command. Usage: %post_group group_name message".encode())
                 else:
                     group_name, content = parts[1], parts[2]
                     post_group_message(conn, username, content, group_name)
-            elif msg.startswith("%groups"):
+            elif msg == ("%group_users"):
+                group_name = msg.split()[1]
+                send_group_users(conn, group_name)
+            elif msg.startswith("%post "):
+                post_message(username, msg[6:])
+            elif msg == ("%groups"):
                 list_groups(conn)
-            elif msg.startswith("%exit"):
+            elif msg == ("%exit"):
                 print(f"{username} disconnected from bulletin board server")
                 break
         except Exception as e:
@@ -97,6 +100,14 @@ def send_user_list(conn):
     # MAY NEED TO SORT SO YOU ONLY SEE USERS IN YOUR GROUP
     user_list = ", ".join(clients.values())
     conn.send(f"Current users: {user_list}".encode())
+
+def send_group_users(conn, group_name):
+    with lock:
+        if group_name not in groups:
+            conn.send(f"Error: Group '{group_name}' does not exist.".encode())
+            return
+        user_list = ", ".join([clients[client] for client in groups[group_name]["users"]])
+        conn.send(f"Users in group '{group_name}': {user_list}".encode())
 
 # Posts a new message
 def post_message(sender, content):
@@ -148,6 +159,15 @@ def leave_group(conn, username, group_name):
         # Send confirmation to the user
         conn.send(f"You have left the group '{group_name}'.".encode())
 
+def handle_join(conn, username):
+    with lock:
+        if conn in clients:
+            conn.send("You are already connected to the chat.".encode())
+            return
+        clients[conn] = username
+        notify_users(f"{username} has joined the chat.\n")
+        conn.send("You have joined the chat.".encode())
+
 
 # Join msg board 
 def handle_group_join(conn, username, group_name):
@@ -169,7 +189,7 @@ def handle_group_join(conn, username, group_name):
             print(f"Group {group_name} now has members: {groups[group_name]['users']}")
 
             # Step 4: Notify group members
-            notify_group_users(group_name, f"{username} has joined {group_name}.")
+            notify_group_users(group_name, f"{username} has joined {group_name}.\n")
             conn.send(f"Joined group '{group_name}'.".encode())
 
     except Exception as e:
@@ -256,12 +276,10 @@ def list_groups(conn):
 
 # Leave the bulletin board server, but can still re-join later
 def leave(conn, username):
+    for group in groups.values():
+        if conn in group["users"]:
+            leave_group(conn, username, group)
     with lock:
-        for group in groups.values():
-            if conn in group["users"]:
-                group["users"].remove(conn)
-                print(f"{username} has left {group}.")
-                notify_group_users(group, f"{username} has left the chat.")
         if conn in clients:
             del clients[conn]
             notify_users(f"{username} has left the chat.")
