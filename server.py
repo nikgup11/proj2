@@ -40,12 +40,9 @@ def handle_client(conn, addr):
         try:
             msg = conn.recv(1024).decode()  # Wait for client command input
                       
-            if msg == ("%join"):
-                handle_join(conn, username) # NEED TO IMPLEMENT SEPARATE JOIN FOR OUTSIDE OF GROUPS (PART 1)
-            elif msg.startswith("%message "):  # Handle %message command
-                message_content = msg[9:]  # Remove "%message " from the string
-                post_message(username, message_content)  # Call post_message
-            elif msg == ("%users"):
+            if msg == ("%join"): # Join public chat
+                handle_join(conn, username)
+            elif msg == ("%users"): # List of all users in public chat/server
                 send_user_list(conn)
             elif msg.startswith("%retrieve_message "):  # Handle message retrieval by ID
                 parts = msg.split()
@@ -54,10 +51,10 @@ def handle_client(conn, addr):
                 else:
                     message_id = parts[1]
                     retrieve_message(conn, message_id)  # Retrieve the message by ID
-            elif msg.startswith("%group_join "):
+            elif msg.startswith("%group_join "): # Join specific group
                 group_name = msg.split()[1]
                 handle_group_join(conn, username, group_name)
-            elif msg.startswith("%group_messages "):
+            elif msg.startswith("%group_messages "): # Get specific message by id from a group name
                 parts = msg.split()
                 if len(parts) < 3:
                     conn.send("Invalid command. Usage: %group_messages group_name message_id".encode())
@@ -65,34 +62,34 @@ def handle_client(conn, addr):
                     group_name = parts[1]
                     message_id = parts[2]
                     retrieve_group_messages(conn, group_name, message_id)
-            elif msg.startswith("%group_leave "):
+            elif msg.startswith("%group_leave "): # Leave group
                 parts = msg.split()
                 if len(parts) < 2:
                     conn.send("Invalid command. Usage: %leave_group group_name".encode())
                 else:
                     group_name = parts[1]
                     leave_group(conn, username, group_name)
-            elif msg == ("%leave"):
+            elif msg == ("%leave"): # Leave public chat (and any groups if a member of them)
                 leave(conn, username)
-            elif msg.startswith("%group_post "):
+            elif msg.startswith("%group_post "): # Post a message in group
                 parts = msg.split(" ", 2)
                 if len(parts) < 3:
                     conn.send("Invalid command. Usage: %post_group group_name message".encode())
                 else:
                     group_name, content = parts[1], parts[2]
                     post_group_message(conn, username, content, group_name)
-            elif msg.startswith("%group_users "):
+            elif msg.startswith("%group_users "): # Get list of users in specific group
                 group_name = msg.split()[1]
                 send_group_users(conn, group_name)
-            elif msg.startswith("%post "):
+            elif msg.startswith("%post "): # Post in public chat
                 post_message(username, msg[6:])
-            elif msg == ("%groups"):
+            elif msg == ("%groups"): # Get list of available groups
                 list_groups(conn)
-            elif msg == ("%exit"):
+            elif msg == ("%exit"): # Exit server
                 exit_conn(conn, username)
                 print(f"{username} disconnected from bulletin board server")
                 break
-            elif msg.startswith("%connect "):
+            elif msg.startswith("%connect "): # Connect to server
                 conn.send("Error: You are already connected to the chat.".encode())
             else:
                 conn.send("Invalid command. Please try again.".encode())
@@ -109,10 +106,10 @@ def notify_users(message):
 
 # Sends the current list of users to requesting client
 def send_user_list(conn):
-    # MAY NEED TO SORT SO YOU ONLY SEE USERS IN YOUR GROUP
     user_list = ", ".join(clients.values())
     conn.send(f"Current users: {user_list}".encode())
 
+# Send list of users in group_name
 def send_group_users(conn, group_name):
     with lock:
         if group_name not in groups:
@@ -121,7 +118,7 @@ def send_group_users(conn, group_name):
         user_list = ", ".join([clients[client] for client in groups[group_name]["users"]])
         conn.send(f"Users in group '{group_name}': {user_list}".encode())
 
-# Posts a new message
+# Posts a new message in public chat
 def post_message(sender, content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Current time
     message_id = len(messages) + 1  # Generate new message ID
@@ -129,8 +126,6 @@ def post_message(sender, content):
     
     with lock:
         messages.append(message)  # Add the new message to the list
-        if len(messages) > 2:  # Keep only the last 2 messages
-            messages.pop(0)
 
     # Notify all users
     notify_users(message)
@@ -171,18 +166,19 @@ def leave_group(conn, username, group_name):
         # Send confirmation to the user
         conn.send(f"You have left the group '{group_name}'.".encode())
 
+# Join public chat 
 def handle_join(conn, username):
     with lock:
         if conn in clients:
             conn.send("You are already connected to the chat.".encode())
             return
-        clients[conn] = username
+        clients[conn] = username # add to client list
         notify_users(f"{username} has joined the chat.\n")
         conn.send("You have joined the chat.\n".encode())
-        print_last_two(conn)
+        print_last_two(conn) # Display last two messages only
 
 
-# Join msg board 
+# Join group while it exists and not already a member 
 def handle_group_join(conn, username, group_name):
     try:
         # Step 1: Check if the group exists (no need to hold the lock here)
@@ -223,6 +219,7 @@ def start_server():
         print(f"Connection from {addr}") 
         threading.Thread(target=handle_client, args=(conn, addr)).start()  # Start a new thread for each client
 
+# Send notification to other users in your group when something noteable happens like disconnection or new message
 def notify_group_users(group_name, message):
     for client in groups[group_name]["users"]:
         try:
@@ -290,7 +287,7 @@ def list_groups(conn):
 
 # Leave the bulletin board server, but can still re-join later
 def leave(conn, username): 
-    for group_name in groups:
+    for group_name in groups: # Leaves any groups you're a part of while leaving the server
         if conn in groups[group_name]["users"]:
             leave_group(conn, username, group_name)
     with lock:
@@ -300,16 +297,20 @@ def leave(conn, username):
             conn.send("You have left the chat.".encode())
         else:
             conn.send("You are not connected to the chat.".encode())
+
+# Exit server and close connection
 def exit_conn(conn, username):
     leave(conn, username)
     conn.close()
 
+# Display last two messages when new user joins
 def print_last_two(conn):
     if len(messages) > 1:
         retrieve_message(conn, len(messages)-1)
     if len(messages) > 0:
         retrieve_message(conn, len(messages))
 
+# Display last two group messages when new user joins
 def print_last_two_group(conn, group_name):
     if len(groups[group_name]["messages"]) > 1:
         retrieve_group_messages(conn, group_name, len(groups[group_name]["messages"])-1)
