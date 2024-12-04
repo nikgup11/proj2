@@ -19,5 +19,5 @@
 * %exit - terminates all connections and disconnects you from the server.
 * %group_users - lists all users in any group specified.
 
-**Major Issues:**
-The two biggest issues faced were %connect and %join, because when leaving a group or the chat, and trying to re-connect or re-join, [ADD MORE LATER] 
+**Major Issues & Fixes:**
+The two biggest issues faced were %connect and %exit. When exiting a group or the chat, an exception would be caught that had to do with bad file directory, which we couldn't explain why that was the issue. However, after some de-bugging we fixed it by checking that the client socket was closed when the %exit command goes to the notification listener in client.py, and breaking out of the listener and the client. The %connect command was more of a higher-level issue, which is because our implementation automatically connected to the server when running client.py, so when you try to connect to the same 127.0.0.1:65432 server/port from within the server itself, it disconnects and reconnects fine, but an error is thrown. This is just a quirk of our implementation since we automatically connect anyways and this could be fixed by simply prompting for the %connect sommand before asking for username input or allowing for chat commands, but since we are using only one server, this would be redundant so we've left it the way it is.    
