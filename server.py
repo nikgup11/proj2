@@ -142,7 +142,7 @@ def retrieve_message(conn, message_id):
         # Retrieve the message from the list
         if 1 <= message_id <= len(messages):
             message = messages[message_id - 1]  # Get the message
-            conn.send(f"Message {message_id}: {message}".encode())  # Send the message to the client
+            conn.send(f"Message {message_id}: {message}\n".encode())  # Send the message to the client
         else:
             conn.send(f"Error: Message ID {message_id} not found.".encode())
     except ValueError:
@@ -178,8 +178,8 @@ def handle_join(conn, username):
             return
         clients[conn] = username
         notify_users(f"{username} has joined the chat.\n")
-        conn.send("You have joined the chat.".encode())
-        print_last_two(conn, messages)
+        conn.send("You have joined the chat.\n".encode())
+        print_last_two(conn)
 
 
 # Join msg board 
@@ -203,7 +203,7 @@ def handle_group_join(conn, username, group_name):
 
             # Step 4: Notify group members
             notify_group_users(group_name, f"{username} has joined {group_name}.\n")
-            conn.send(f"Joined group '{group_name}'.".encode())
+            conn.send(f"Joined group '{group_name}'.\n".encode())
         print_last_two_group(conn, group_name)
 
     except Exception as e:
@@ -279,7 +279,7 @@ def retrieve_group_messages(conn, group_id, message_id):
                 conn.send("Error: Invalid message ID.".encode())
                 return
             message = groups[group_id]['messages'][message_id - 1]
-            conn.send(f"Message {message_id} from group {group_id}: {message}".encode())
+            conn.send(f"Message {message_id} from group {group_id}: {message}\n".encode())
         except ValueError:
             conn.send("Error: Invalid message ID format.".encode())
 
