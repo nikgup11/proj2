@@ -33,6 +33,7 @@ def handle_client(conn, addr):
         clients[conn] = username
         notify_users(f"{username} has joined the chat.\n")
         list_groups(conn)
+        print_last_two(conn)
 
     # Command handling loop
     while True:
@@ -94,7 +95,7 @@ def handle_client(conn, addr):
             elif msg.startswith("%connect "):
                 conn.send("Error: You are already connected to the chat.".encode())
             else:
-                conn.send("Invalid command. Please try again.")
+                conn.send("Invalid command. Please try again.".encode())
         except Exception as e:
             print(f"Error handling client {addr}: {e}")
             break
@@ -178,6 +179,7 @@ def handle_join(conn, username):
         clients[conn] = username
         notify_users(f"{username} has joined the chat.\n")
         conn.send("You have joined the chat.".encode())
+        print_last_two(conn, messages)
 
 
 # Join msg board 
@@ -202,6 +204,7 @@ def handle_group_join(conn, username, group_name):
             # Step 4: Notify group members
             notify_group_users(group_name, f"{username} has joined {group_name}.\n")
             conn.send(f"Joined group '{group_name}'.".encode())
+        print_last_two_group(conn, group_name)
 
     except Exception as e:
         print(f"Error handling join for {username} in {group_name}: {e}")
@@ -300,6 +303,18 @@ def leave(conn, username):
 def exit_conn(conn, username):
     leave(conn, username)
     conn.close()
+
+def print_last_two(conn):
+    if len(messages) > 1:
+        retrieve_message(conn, len(messages)-1)
+    if len(messages) > 0:
+        retrieve_message(conn, len(messages))
+
+def print_last_two_group(conn, group_name):
+    if len(groups[group_name]["messages"]) > 1:
+        retrieve_group_messages(conn, group_name, len(groups[group_name]["messages"])-1)
+    if len(groups[group_name]["messages"]) > 0:
+        retrieve_group_messages(conn, group_name, len(groups[group_name]["messages"]))
 
 # This block ensures that the server runs when the script is executed directly
 if __name__ == "__main__":
